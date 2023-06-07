@@ -1,6 +1,8 @@
+## Root-fungal associations in transformed landscapes: Insights from network and indicator species analysis
 # DNA metabarcoding of roots
+
 ## Description 
-Data processing and downstream analysis pipeline for roots metabarcoding sequences using a dataset comprising four land-use types (forest, jungle rubber, rubber, and oil palm plantations) sampled in Indonesia. This project incorporates bioinformatic analysis, network analysis, and indicator species analysis linked to the project: "Root-fungal associations in transformed landscapes: Insights from network and indicator species analysis". 
+This repository contains scripts for the data processing and downstream analysis pipeline for roots metabarcoding sequences using a dataset comprising four land-use types (forest, jungle rubber, rubber, and oil palm plantations) sampled in Indonesia in the framework of the EFForTS project. This project incorporates bioinformatic, network, and indicator species analysis. 
 
 ### Bioinformatic tools
 * [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
@@ -14,7 +16,7 @@ library(edgeR)
 library(BiodiversityR)
 library(vegan)
 library(ggplot2)
-library(indicspecies) # Indicator species analysis
-library(rnetcarto) # Network analysis
+library(indicspecies) ## Indicator species analysis
+library(rnetcarto) ## Network analysis
 ```
  

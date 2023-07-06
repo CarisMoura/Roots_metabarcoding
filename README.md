@@ -2,7 +2,7 @@
 # DNA metabarcoding of roots
 
 ## Description 
-This repository contains scripts for the data processing and downstream analysis pipeline for roots metabarcoding sequences using a dataset comprising four land-use types (forest, jungle rubber, rubber, and oil palm plantations) sampled in Indonesia in the framework of the EFForTS project. This project incorporates bioinformatic, correlational analysis, network, and indicator species analysis from plants and fungi detected in a mixture of root samples. 
+This repository contains scripts for the data processing and downstream analysis pipeline for roots metabarcoding sequences using a dataset comprising four land-use types (rainforest, jungle rubber, rubber, and oil palm plantations) sampled in Indonesia in the framework of the EFForTS project. This project incorporates bioinformatic, correlational analysis, network, and indicator species analysis from plants and fungi detected in a mixture of root samples. 
 
 ### Bioinformatic tools
 * [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)

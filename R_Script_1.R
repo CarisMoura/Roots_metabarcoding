@@ -5,8 +5,11 @@
 #-----------------------------------------------------------------------------------------------------------------------------------------#
 #Contents: 
 #1. Figure S1 - Accumulation curve using phyloseq object and gamma diversity barplot
-#Figure S2 - 
-Table S1, 
+#2. Figure S2 - Radar plot Chao1 and Shannon alpha diversity
+#3. Table S1 - PERMANOVA
+#4. Figure S3 -  Weighted UPGMA tree based on Unifrac distances and barplot of taxa composition 
+
+
 #------------------------------------------------------------------------------#
 #                                 Packages                                     #
 #------------------------------------------------------------------------------#

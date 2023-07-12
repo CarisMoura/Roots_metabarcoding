@@ -799,6 +799,7 @@ sample_order_Rt <- c( "BF2b", "BF4b", "BF3c","BJ4b","BJ2b", "HJ4b", "HJ3b", "HJ2
 sample_order_Rt <- sample_names(roots.rarefied)[order.dendrogram(rt_dend)]
 
 
+##### Plot barplot of plant orders composition in the dataset #####                                          
 data_rt <- psmelt(roots.rarefied)
 p <- ggplot(data=data_rt, aes(x=Sample, y=Abundance, fill=Order))
 barplot_roots <- p + geom_bar(aes(), stat="identity", position="fill") +

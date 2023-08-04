@@ -6,8 +6,11 @@
 #Contents: 
 #1. Figure S1 - Accumulation curve using phyloseq object and gamma diversity barplot
 #2. Figure S2 - Radar plot Chao1 and Shannon alpha diversity
-#3. Table S1 - PERMANOVA
-#4. Figure S3 -  Weighted UPGMA tree based on Unifrac distances and barplot of taxa composition 
+#3. Table S1  - PERMANOVA
+#4. Figure S3 - Weighted UPGMA tree based on Unifrac distances and barplot of taxa composition 
+#5. Figure 1  - Bipartite network based on indicator species
+#6. Table 1   - Network metrics of roots and fungi co-occurrence network
+#7. Table S2  - Network metric results
 
 
 #------------------------------------------------------------------------------#
@@ -934,3 +937,595 @@ plot_grid(fp_dend, barplot_fg_order,
 )
 
 
+
+#----------------------------------------------------------#
+# 5. Figure 1 Bipartite network based on indicator species #
+#----------------------------------------------------------#
+                                        ##### Estimating land use system responsive OTUs with indicator species analysis for plants #####
+indic_roots <- as.data.frame(t(otu.rare))
+indic_roots_groups <- roots.env$type
+length(unique(indic_roots_groups))
+
+
+## set.seed(5971)
+indicatorsp_roots <- multipatt(indic_roots,indic_roots_groups,func = "IndVal.g",control=how(nperm=9999))
+
+summary(indicatorsp_roots,alpha=1,indvalcomp=T)
+indic_roots_df <- indicatorsp_roots$sign
+write.table(indic_roots_df,paste0("indic_roots_df.txt"),sep="\t",quote=F)
+
+
+##### Select OTUs classified as indicator species with significant p-value #####
+forest_roots <- as.matrix(indic_roots_df[which(indic_roots_df$s.Forest == 1 & indic_roots_df$p.value < 0.05),])
+jungle_roots <- as.matrix(indic_roots_df[which(indic_roots_df$s.Jungle == 1 & indic_roots_df$p.value < 0.05),])
+rubber_roots <- as.matrix(indic_roots_df[which(indic_roots_df$s.Rubber == 1 & indic_roots_df$p.value < 0.05),])
+oil_roots <- as.matrix(indic_roots_df[which(indic_roots_df$s.OilPalm == 1 & indic_roots_df$p.value < 0.05),])
+
+roots_r_values <- rbind(forest_roots,jungle_roots,rubber_roots,oil_roots)
+colnames(roots_r_values)[1:4] <-c("Forest","Jungle","OilPalm","Rubber")
+
+dim(roots_r_values)
+##### Check range of correlation coefficients #####
+range(roots_r_values[,"stat"])
+
+
+##### Check total number of indicator OTUS #####
+length(unique(rownames(roots_r_values)))
+
+
+##### Proportion of roots OTUs correlated to each land use system #####
+length(unique(rownames(roots_r_values)))/nrow(indic_roots)
+roots_ra <- t(t(otu.rare)/colSums(otu.rare)) * 100
+sum(colSums(roots_ra[unique(rownames(roots_r_values)),]))/sum(colSums(roots_ra))
+
+
+##### Construct node table for plant communities from indicator species data #####
+plants_bipartite <- data.frame(from= c(rep("Forest",length(which(roots_r_values[,"Forest"]==1))),
+                                      rep("Jungle",length(which(roots_r_values[,"Jungle"]==1))),
+                                      rep("OilPalm",length(which(roots_r_values[,"OilPalm"]==1))),
+                                      rep("Rubber",length(which(roots_r_values[,"Rubber"]==1)))),
+                              to= c(rownames(roots_r_values)[which(roots_r_values[,"Forest"]==1)],
+                                    rownames(roots_r_values)[which(roots_r_values[,"Jungle"]==1)],
+                                    rownames(roots_r_values)[which(roots_r_values[,"OilPalm"]==1)],
+                                    rownames(roots_r_values)[which(roots_r_values[,"Rubber"]==1)]),
+                              r= c(roots_r_values[which(roots_r_values[,"Forest"]==1),"stat"],
+                                   roots_r_values[which(roots_r_values[,"Jungle"]==1),"stat"],
+                                   roots_r_values[which(roots_r_values[,"OilPalm"]==1),"stat"],
+                                   roots_r_values[which(roots_r_values[,"Rubber"]==1),"stat"]))
+
+
+##### Plot bipartite network for plant data #####
+r_bipartite <- graph.data.frame(plants_bipartite, directed=FALSE)
+bipartite.mapping(r_bipartite)
+
+V(r_bipartite)$type <- bipartite_mapping(r_bipartite)$type
+plot(r_bipartite)
+
+plot(r_bipartite, vertex.label.cex = 0.8, vertex.label.color = "black")
+plot(r_bipartite, layout=layout.bipartite, vertex.size=7, vertex.label.cex=0.6)
+
+
+##### Define attributes of network plots #####
+## Color and shape
+V(r_bipartite)$color <- ifelse(V(r_bipartite)$type, "darkgreen", "yellow")
+V(r_bipartite)$shape <- ifelse(V(r_bipartite)$type, "circle", "square")
+E(r_bipartite)$color <- "lightgray"
+
+plot(r_bipartite, vertex.label.cex = 0.8, vertex.label.color = "black")
+plot(r_bipartite, node.size= .4, vertex.label.cex = 0.4, vertex.label.color = "black")
+plot(r_bipartite, node.size= .4, node.label= V(r_bipartite)$family, vertex.label.cex = 0.4, vertex.label.color = "black")
+
+
+##### Some network metrics #####
+types <- V(r_bipartite)$type                 
+deg <- degree(r_bipartite)
+bet <- betweenness(r_bipartite)
+clos <- closeness(r_bipartite)
+eig <- eigen_centrality(r_bipartite)$vector
+
+cent_df <- data.frame(types, deg, bet, clos, eig)
+cent_df[order(cent_df$type, decreasing = TRUE),] 
+
+
+##### Sizing Vertices by Centrality #####
+V(r_bipartite)$size <- degree(r_bipartite)
+V(r_bipartite)$label.cex <- degree(r_bipartite) * 0.03
+plot(r_bipartite, layout = layout_with_fr)
+
+
+##### Prepare node attribute table for each OTU #####
+root_bipartite_attrib <- data.frame(node=unique(rownames(roots_r_values)),indicgroup=0)
+
+for (i in as.character(root_bipartite_attrib$node))
+{
+  root_bipartite_attrib[root_bipartite_attrib$node==i,"indicgroup"] <- paste(colnames(roots_r_values)[which(roots_r_values[i,1:4]==1)],collapse = "_")
+}
+
+root_bipartite_attrib <- cbind(root_bipartite_attrib,roots.tax[as.character(root_bipartite_attrib$node),])
+
+
+##### Set labels for nodes #####
+V(r_bipartite)$label <- V(r_bipartite)$name
+
+
+##### Set node sizes #####
+V(r_bipartite)$size <- 6
+
+
+##### Set node shapes #####
+V(r_bipartite)$shape <- c(rep("circle",4),rep("circle",158))
+
+
+##### Link taxonomy able to otu table #####
+tax_filter_roots <- roots.tax[rownames(otu.rare),]
+
+
+##### Define node colors based on order assignment #####
+V(r_bipartite)$color <- V(r_bipartite)$name
+V(r_bipartite)$color[1:4] <- root_bipartite_attrib[V(r_bipartite)$name, ]$name
+V(r_bipartite)$color <- root_bipartite_attrib[ V(r_bipartite)$color, ]$Order
+V(r_bipartite)$color[1:4] <- "white"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Arecales"] <- "#522d05ff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Ericales"] <- "#8c510aff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Fabales"] <- "#c87137ff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Gentianales"] <- "#edd1bfff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Lamiales"] <- "#a1cca5"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Laurales"] <- "#90a955"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Malpighiales"] <- "#01665eff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Myrtales"] <- "#8ebedaff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Poales"] <- "#0c47a0ff"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Rosales"] <- "#e8ddb5"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Santalales"] <- "#d5c8e0"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Sapindales"] <- "#cccccc"
+V(r_bipartite)$color[V(r_bipartite)$color %in% "Zingiberales"] <- "#595959"
+
+
+##### Figure 1 A: Plot Plant Bipartite Network #####
+plot(r_bipartite, node.size= 1,edge.curved=0.2,layout=layout_with_fr(r_bipartite),
+     edge.arrow.size=3, vertex.label= NA, vertex.frame.color="#d2d2d2ff",vertex.frame.width= 0.5, vertex.label.cex = NA,
+     vertex.size=11,vertex.color=V(r_bipartite)$color, vertex.shape="circle") 
+
+Figure1A <-recordPlot()
+
+
+##### Figure 1 B: Relative abundance of indicator plant OTUs per order#####
+ind_plants <- V(r_bipartite)$label
+dat.trans_ord = transform_sample_counts(dat.aglo_ord, function(x) x/sum(x))
+prune.dat.two_ord = prune_taxa(ind_plants, roots.rarefied)
+dat.dataframe_ind = psmelt(prune.dat.two_ord)
+dat.agr_ind = aggregate(Abundance~Sample+type+Order, data=dat.dataframe_ind, FUN=mean)
+
+p <- ggplot(data=dat.agr_ind, aes(x=type, y=Abundance, fill=Order))
+Figure1B <- p + geom_bar(aes(), stat="identity", position="fill") +
+  scale_fill_manual(values =  c("#522d05ff",  "#8c510aff",  "#c87137ff", "#edd1bfff", "#a1cca5",  "#90a955",
+                                "#01665eff", "#8ebedaff",  "#0c47a0ff", "#e8ddb5",  "#b4a3cbff",  "#cccccc", "#595959")) +
+  theme(legend.position="bottom", axis.text.x = element_text(vjust = 0.5, hjust=1), legend.key.size = unit(0.2, 'cm')) + guides(fill=guide_legend(nrow=9))
+
+
+Figure1B <- Figure1B + theme_bw() + scale_x_discrete(limits = c("Forest","Jungle","Rubber", "OilPalm"))
+Figure1B <- Figure1B + theme(legend.position="right", axis.text.x = element_text(vjust = 0.5, hjust=1))  
+
+
+##### Figure 1 C: Relative abundance of indicator plant OTUs functional groups #####
+dat.agr_ind_cat = aggregate(Abundance~Sample+type+Category, data=dat.dataframe_ind, FUN=mean)
+
+p1 <- ggplot(data=dat.agr_ind_cat, aes(x=type, y=Abundance, fill=Category))
+Figure1C <- p1 + geom_bar(aes(), stat="identity", position="fill") +
+  scale_fill_manual(values = c("#018571ff", "#80cdc1ff", "#dfc27dff")) +
+  theme(legend.position="bottom", axis.text.x = element_text(vjust = 0.5, hjust=1), legend.key.size = unit(0.2, 'cm')) + guides(fill=guide_legend(nrow=3))
+
+
+Figure1C <- Figure1C + theme_bw()
+Figure1C <- Figure1C + theme(legend.position="bottom", axis.text.x = element_text(vjust = 0.5, hjust=1))  
+
+
+##### Relative abundance of indicator plant OTUs native/non-native #####
+dat.agr_ind_nat = aggregate(Abundance~Sample+type+Native_Alien, data=dat.dataframe_ind, FUN=mean)
+
+nat_plot <- ggplot(data=dat.agr_ind_nat, aes(x=type, y=Abundance, fill=Native_Alien))
+nat_plot <- nat_plot + geom_bar(aes(), stat="identity", position="fill") +
+  scale_fill_manual(values = c("#018571ff", "#80cdc1ff")) +
+  theme(legend.position="bottom", axis.text.x = element_text(vjust = 0.5, hjust=1), legend.key.size = unit(0.2, 'cm')) + guides(fill=guide_legend(nrow=3))
+
+
+nat_plot <- nat_plot + theme_bw()
+
+
+##### Estimating land use system responsive OTUs with indicator species analysis for fungi #####
+indic_fungi <- as.data.frame(t(otu_fg))
+indic_fg_groups <- fungi.env$type
+length(unique(indic_fg_groups))
+
+
+## set.seed(5971)
+indicatorsp_fg <- multipatt(indic_fungi,indic_fg_groups,func = "IndVal.g",control=how(nperm=9999))
+
+summary(indicatorsp_fg,alpha=1,indvalcomp=T)
+indic_fg_df <- indicatorsp_fg$sign
+write.table(indic_fg_df,paste0("indic_fg_df.txt"),sep="\t",quote=F)
+
+
+##### Select OTUs classified as indicator species with significant p-value #####
+forest_fg <- as.matrix(indic_fg_df[which(indic_fg_df$s.Forest == 1 & indic_fg_df$p.value < 0.05),])
+jungle_fg <- as.matrix(indic_fg_df[which(indic_fg_df$s.Jungle == 1 & indic_fg_df$p.value < 0.05),])
+rubber_fg <- as.matrix(indic_fg_df[which(indic_fg_df$s.Rubber == 1 & indic_fg_df$p.value < 0.05),])
+oil_fg <- as.matrix(indic_fg_df[which(indic_fg_df$s.OilPalm == 1 & indic_fg_df$p.value < 0.05),])
+
+fg_r_values <- rbind(forest_fg,jungle_fg,rubber_fg,oil_fg)
+colnames(fg_r_values)[1:4] <-c("Forest","Jungle","OilPalm","Rubber")
+
+
+##### Check range of correlation coefficients #####
+range(fg_r_values[,"stat"])
+
+
+##### Check total number of indicator OTUS #####
+length(unique(rownames(fg_r_values)))
+
+
+##### Proportion of roots OTUs correlated to each land use system #####
+length(unique(rownames(fg_r_values)))/nrow(indic_fungi)
+fungi_ra <- t(t(otu_fg)/colSums(otu_fg)) * 100
+sum(colSums(fungi_ra[unique(rownames(fg_r_values)),]))/sum(colSums(fungi_ra))
+
+
+##### Construct node table for plant communities from indicator species data #####
+fungi_bipartite <- data.frame(from= c(rep("Forest",length(which(fg_r_values[,"Forest"]==1))),
+                                       rep("Jungle",length(which(fg_r_values[,"Jungle"]==1))),
+                                       rep("OilPalm",length(which(fg_r_values[,"OilPalm"]==1))),
+                                       rep("Rubber",length(which(fg_r_values[,"Rubber"]==1)))),
+                               to= c(rownames(fg_r_values)[which(fg_r_values[,"Forest"]==1)],
+                                     rownames(fg_r_values)[which(fg_r_values[,"Jungle"]==1)],
+                                     rownames(fg_r_values)[which(fg_r_values[,"OilPalm"]==1)],
+                                     rownames(fg_r_values)[which(fg_r_values[,"Rubber"]==1)]),
+                               r= c(fg_r_values[which(fg_r_values[,"Forest"]==1),"stat"],
+                                    fg_r_values[which(fg_r_values[,"Jungle"]==1),"stat"],
+                                    fg_r_values[which(fg_r_values[,"OilPalm"]==1),"stat"],
+                                    fg_r_values[which(fg_r_values[,"Rubber"]==1),"stat"]))
+
+
+##### Plot bipartite network for plant data #####
+fg_bipartite <- graph.data.frame(fungi_bipartite, directed=FALSE)
+bipartite.mapping(fg_bipartite)
+
+V(fg_bipartite)$type <- bipartite_mapping(fg_bipartite)$type
+plot(fg_bipartite)
+
+plot(fg_bipartite, vertex.label.cex = 0.8, vertex.label.color = "black")
+plot(fg_bipartite, layout=layout.bipartite, vertex.size=7, vertex.label.cex=0.6)
+
+
+##### Define attributes of network plots #####
+## Color and shape
+V(fg_bipartite)$color <- ifelse(V(fg_bipartite)$type, "darkgreen", "yellow")
+V(fg_bipartite)$shape <- ifelse(V(fg_bipartite)$type, "circle", "square")
+E(fg_bipartite)$color <- "lightgray"
+
+plot(fg_bipartite, vertex.label.cex = 0.8, vertex.label.color = "black")
+plot(fg_bipartite, node.size= .4, vertex.label.cex = 0.4, vertex.label.color = "black")
+plot(fg_bipartite, node.size= .4, node.label= V(fg_bipartite)$family, vertex.label.cex = 0.4, vertex.label.color = "black")
+
+
+##### Some network metrics #####
+types_fg <- V(fg_bipartite)$type                 
+deg_fg <- degree(fg_bipartite)
+bet_fg <- betweenness(fg_bipartite)
+clos_fg <- closeness(fg_bipartite)
+eig_fg <- eigen_centrality(fg_bipartite)$vector
+
+cent_df_fg <- data.frame(types_fg, deg_fg, bet_fg, clos_fg, eig_fg)
+cent_df_fg[order(cent_df_fg$types_fg, decreasing = TRUE),] 
+
+
+##### Sizing Vertices by Centrality #####
+V(fg_bipartite)$size <- degree(fg_bipartite)
+V(fg_bipartite)$label.cex <- degree(fg_bipartite) * 0.03
+plot(fg_bipartite, layout = layout_with_fr)
+
+
+##### Prepare node attribute table for each OTU #####
+fg_bipartite_attrib <- data.frame(node=unique(rownames(fg_r_values)),indicgroup=0)
+
+for (i in as.character(fg_bipartite_attrib$node))
+{
+  fg_bipartite_attrib[fg_bipartite_attrib$node==i,"indicgroup"] <- paste(colnames(fg_r_values)[which(fg_r_values[i,1:4]==1)],collapse = "_")
+}
+
+fg_bipartite_attrib <- cbind(fg_bipartite_attrib,fungi.tax[as.character(fg_bipartite_attrib$node),])
+write_xlsx(fg_bipartite_attrib,"fg_bipartite_attrib.xlsx")
+
+
+##### Set labels for nodes #####
+V(fg_bipartite)$label <- V(fg_bipartite)$name
+
+
+##### Set node sizes #####
+V(fg_bipartite)$size <- 6
+
+
+##### Set node shapes #####
+V(fg_bipartite)$shape <- c(rep("circle",4),rep("circle",158))
+
+
+##### Link taxonomy able to otu table #####
+tax_filter_fg <- fungi.tax[rownames(otu_fg),]
+
+
+##### Define node colors based on phylum assignment #####
+V(fg_bipartite)$color <- V(fg_bipartite)$label
+V(fg_bipartite)$color[1:4] <- fg_bipartite_attrib[V(fg_bipartite)$name, ]$name
+V(fg_bipartite)$color <- fg_bipartite_attrib[ V(fg_bipartite)$color, ]$phylum
+V(fg_bipartite)$color[1:4] <- "white"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Ascomycota"] <- "#522d05ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Basidiomycota"] <- "#8f4f06ff"
+#V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Chytridiomycota"] <- "#d5bd8cff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Calcarisporiellomycota"] <- "#8a802cff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Glomeromycota"] <-"#f6e7c2ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Kickxellomycota"] <- "#f4f4f4ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Mortierellomycota"] <- "#cbe3dfff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Mucoromycota"] <- "#86c7bcff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "Rozellomycota"] <- "#559a93ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "unidentified"] <- "#01665eff"
+V(fg_bipartite)$name[5:268] <- NA
+
+
+##### Figure 1 D: Plot fungi Bipartite Network #####
+plot(fg_bipartite, node.size= 1,edge.curved=0.2,layout=layout_with_fr(fg_bipartite),
+     edge.arrow.size=2, vertex.label= V(fg_bipartite)$name, vertex.frame.color="#d2d2d2ff",vertex.frame.width= 0.5, vertex.label.cex = NA,
+     vertex.size=11,vertex.color=V(fg_bipartite)$color, vertex.shape=V(fg_bipartite)$shape) 
+
+Figure1D <-recordPlot()
+
+
+##### Define node colors based on functional guilds assignment #####
+V(fg_bipartite)$color <- V(fg_bipartite)$label
+V(fg_bipartite)$color[1:4] <- fg_bipartite_attrib[V(fg_bipartite)$name, ]$name
+V(fg_bipartite)$color <- fg_bipartite_attrib[ V(fg_bipartite)$color, ]$groups
+V(fg_bipartite)$color[1:4] <- "white"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "AM"] <- "#522d05ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "ECM"] <- "#a6611aff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "saprotroph"] <- "#80cdc1ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "plant_pathogen"] <-"#f5f5f5ff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "unknown"] <- "#01665eff"
+V(fg_bipartite)$color[V(fg_bipartite)$color %in% "other"] <- "#01665eff"
+
+V(fg_bipartite)$name[5:268] <- NA
+
+plot(fg_bipartite, node.size= 1,edge.curved=0.2,layout=layout_with_fr(fg_bipartite),
+     edge.arrow.size=2, vertex.label= V(fg_bipartite)$name, vertex.frame.color="#d2d2d2ff",vertex.frame.width= 0.5, vertex.label.cex = NA,
+     vertex.size=11,vertex.color=V(fg_bipartite)$color, vertex.shape=V(fg_bipartite)$shape) 
+
+##### Figure 1 E: Relative abundance of indicator plant OTUs per phylum for fungi#####
+ind_fungi <- V(fg_bipartite)$label
+
+dat.trans_phy = transform_sample_counts(fg.rarefied, function(x) x/sum(x))
+prune.dat.two_phy = prune_taxa(ind_fungi, dat.trans_phy)
+dat.dataframe_phy = psmelt(prune.dat.two_phy)
+dat.agr_phy = aggregate(Abundance~Sample+type+phylum, data=dat.dataframe_phy, FUN=mean)
+
+fg_phy <- ggplot(data=dat.agr_phy, aes(x=type, y=Abundance, fill=phylum))
+Figure1E <- fg_phy + geom_bar(aes(), stat="identity", position="fill") +
+  scale_fill_manual(values = c("#522d05ff", "#8f4f06ff", "#8a802cff", "#f6e7c2ff", 
+                               "#f4f4f4ff", "#cbe3dfff", "#86c7bcff", 
+                               "#559a93ff", "#076260ff")) +
+  theme(legend.position="right", axis.text.x = element_text(vjust = 0.5, hjust=1), legend.key.size = unit(0.2, 'cm')) + guides(fill=guide_legend(nrow=15))
+
+
+Figure1E <- Figure1E + theme_bw() + scale_x_discrete(limits = c("Forest","Jungle","Rubber", "OilPalm"))
+
+
+##### Figure 1 F: Relative abundance of indicator plant OTUs functional groups #####
+dat.agr_guild = aggregate(Abundance~Sample+type+groups, data=dat.dataframe_phy, FUN=mean)
+dat.agr_guild$groups[dat.agr_guild$groups %in% "other"] <- "unknown"
+fg_phy_guild <- ggplot(data=dat.agr_guild, aes(x=type, y=Abundance, fill=groups))
+
+
+
+p_guild <- ggplot(data=dat.agr_guild, aes(x=type, y=Abundance, fill=groups))
+Figure_1F <- p_guild + geom_bar(aes(), stat="identity", position="fill") +
+  scale_fill_manual(values = c("#522d05ff", "#a6611aff", "#f5f5f5ff", "#80cdc1ff", 
+                               "#076260ff")) +
+  theme(legend.position="bottom", axis.text.x = element_text(vjust = 0.5, hjust=1), legend.key.size = unit(0.2, 'cm')) + guides(fill=guide_legend(nrow=6))
+
+
+Figure_1F <- Figure_1F + theme_bw() +  scale_x_discrete(limits = c("Forest","Jungle","Rubber", "OilPalm"))
+Figure_1F
+
+                                        
+#---------------------------------------------------------------------#
+# 6.Table 1 Network metrics of roots and fungi co-occurrence network  #
+#---------------------------------------------------------------------#
+##### Combine otu tables from plants and fungi #####
+otu_norm_combine <- rbind(otu.rare, otu_fg)
+
+
+##### Perform Spearman correlation of all OTU pairs #####
+all_cor <- rcorr(t(otu_norm_combine), type=c("spearman"))
+
+
+##### Extract the correlation coefficients and p values #####
+CorrDF <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    from = rownames(cormat)[col(cormat)[ut]],
+    to = rownames(cormat)[row(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+
+
+all_cor_df <- CorrDF(all_cor$r, all_cor$P)
+
+
+##### Adjust P-values for Multiple Comparisons #####
+all_cor_df$padj <- p.adjust(all_cor_df$p, method="none")
+
+
+##### Extract only correlations above 0.7 and p value 0.001 #####
+all_cor_df_padj <- all_cor_df[which(all_cor_df$cor > 0.7),]
+all_cor_df_padj <-all_cor_df_padj[which(all_cor_df_padj$padj < 0.001),]
+write_xlsx(all_cor_df_padj, "all_cor_df_padj.xlsx")
+
+
+##### Modularity and topological roles #####
+##### Prepare input file for netcarto (modularity) analysis #####
+## It takes time, I run it the cluster - check netcarto.sh file 
+nd1 = all_cor_df_padj$from
+nd2 = all_cor_df_padj$to
+weight = all_cor_df_padj$cor
+web = list(nd1,nd2,weight)
+
+library(rnetcarto)
+library(readr)
+library(readxl)
+
+netcarto_out098_1707 <- netcarto(
+  web,
+  seed = 2987,
+  iterfac = 1,
+  coolingfac = 0.98,
+  bipartite = TRUE
+)
+
+write.table(netcarto_out098_1707,paste0("netcarto_out098_1707.txt"),sep="\t",quote=F)
+
+
+##### Estimate OTUs responsive to landuse systemm using edge R #####
+## Fungi OTU responsive to land uses with likelihood ratio testing in edgeR
+model_fungi <- model.matrix(~landuse, data=fungi.env)
+fungi_tax_rare <- tax_table(fg.rarefied)
+fungi_tax_rare <- as.data.frame(fungi_tax_rare)
+otu_fg_df <- as.data.frame(otu_fg)
+
+edgeR_fungi_system <- DGEList(counts=otu_fg_df, group=fungi.env$landuse, genes=fungi_tax_rare)
+edgeR_fungi_system_factors <- calcNormFactors(edgeR_fungi_system)
+
+dge_fungifsyst <- estimateGLMRobustDisp(edgeR_fungi_system_factors, design=model_fungi)
+
+fit_fungi <- glmFit(dge_fungifsyst, design = model_fungi)
+lrt_fungi <- glmLRT(fit_fungi, coef=2:4)
+fsyst_fungi <- topTags(lrt_fungi, n=Inf, p.value=0.05)
+fsyst_fungi <- fsyst_fungi$table
+
+
+## Plant OTU responsive to land uses with likelihood ratio testing in edgeR
+model_plants <- model.matrix(~type, data=roots.env)
+plants_tax_rare <- tax_table(roots.rarefied)
+plants_tax_rare <- as.data.frame(plants_tax_rare)
+otu_pl_df <- as.data.frame(otu.rare)
+
+edgeR_plants_fsyst <- DGEList(counts=otu_pl_df, group=roots.env$type, genes=plants_tax_rare)
+edgeR_plants_fsyst <- calcNormFactors(edgeR_plants_fsyst)
+
+
+dge_plants_fsyst <- estimateGLMRobustDisp(edgeR_plants_fsyst, design=model_plants)
+
+fit_plants <- glmFit(dge_plants_fsyst, design = model_plants)
+lrt_plants <- glmLRT(fit_plants, coef=2:4)
+fsyst_plants <- topTags(lrt_plants, n=Inf, p.value=0.05)
+fsyst_plants <- fsyst_plants$table
+
+
+##### Identify land use sensitive taxa #####
+indic_edge_plants <- intersect(rownames(roots_r_values), rownames(fsyst_plants))
+indic_edge_fungi <- intersect(rownames(fg_r_values), rownames(fsyst_fungi))
+
+indic_edge_combine <- c(indic_edge_plants, indic_edge_fungi)
+
+
+##### Create attribute table for node values #####
+nodeattrib_combine <- data.frame(node=union(all_cor_df_padj$from,all_cor_df_padj$to))
+r_values_combine <- rbind(roots_r_values,fg_r_values)
+
+
+nodeattrib_combine$indicgroup <- 0
+
+for (i in as.character(nodeattrib_combine$node))
+{
+  if (i %in% indic_edge_combine == TRUE)
+  {nodeattrib_combine[nodeattrib_combine$node==i,"indicgroup"] <- paste(colnames(r_values_combine)[which(r_values_combine[i,1:4]==1)],collapse = "_")}
+  else
+  {nodeattrib_combine[nodeattrib_combine$node==i,"indicgroup"]<- "NA"}
+}
+
+rownames(nodeattrib_combine) <- as.character(nodeattrib_combine$node)
+
+dim(indic_edge_combine)
+
+
+#####  Create network #####
+all_net <- graph_from_data_frame(all_cor_df_padj,direct=F,vertices=nodeattrib_combine)
+
+
+##### Count and Characterize nodes #####    
+
+length(V(all_net))
+length(grep("OTU_97_*",names(V(all_net))))
+rtall <- sub("OTU_97_*", "f_97_", names(V(all_net)))
+rtall1 <- rename("OTU_97_*", "f_97_", all_cor_df_padj$from)
+length(grep("OTU*", rtall))
+
+
+df_renamed <- all_cor_df_padj %>%
+  mutate(across(starts_with("from"), ~str_replace(., "^OTU_97_", "fungi_")))
+df_renamed <- df_renamed %>%
+  mutate(across(starts_with("to"), ~str_replace(., "^OTU_97_", "fungi_")))
+
+
+##### Connections #####
+fg_occur <- droplevels(df_renamed[with(df_renamed, grepl("fungi_*",from) & grepl("fungi_*",to)),])
+nrow(fg_occur)
+
+rt_occur <- droplevels(df_renamed[with(df_renamed, grepl("OTU*",from) & grepl("OTU*",to)),])
+nrow(rt_occur)
+
+rtfg_occur <- droplevels(df_renamed[with(df_renamed, grepl("fungi_*",from) & grepl("OTU*",to)),])
+nrow(rtfg_occur)
+
+write_xlsx(rt_occur, "rt_occur.xlsx")
+dim(rt_occur)
+
+
+##### Estimate node degree values #####
+deg <- degree(all_net, mode="all")
+all_deg <- sort(degree(all_net,mode="all"),decr=T)
+mean(all_deg)
+
+
+##### Community structure and definition of modules that contain indicspecies in the landuses #####
+Forest_nodes <- rownames(nodeattrib_combine[nodeattrib_combine$indicgroup=="Forest",])
+Jungle_nodes <- rownames(nodeattrib_combine[nodeattrib_combine$indicgroup=="Jungle",])
+Rubber_nodes <- rownames(nodeattrib_combine[nodeattrib_combine$indicgroup=="Rubber",])
+OilPalm_nodes <- rownames(nodeattrib_combine[nodeattrib_combine$indicgroup=="OilPalm",])
+
+
+cs_nodes_all <- c(Forest_nodes,Jungle_nodes,Rubber_nodes,OilPalm_nodes)
+fg_nodes_all <- cs_nodes_all[grep("OTU_97_*",cs_nodes_all)]
+
+cs_nodes_all1 <- sub("OTU_97_*", "f_97_",cs_nodes_all)
+rt_nodes_all <- cs_nodes_all[grep("OTU*",cs_nodes_all1)]
+
+                                        
+#---------------------------------------------------------------------#
+# 7.Table S2 Network metric results                                   #
+#---------------------------------------------------------------------#
+##### Merge indicator table results with taxonomic table and rnetcarto results #####
+##### Upload netcarto results table #####
+TableS2_Network <- read_excel("~/Network_R/TableS2_Network.xlsx")
+
+colnames(roots.tax)[1] <- "OTU"
+TableS2 <- merge(TableS2_Network, roots.tax, by="OTU")
+write_xlsx(TableS2, "TableS2_plant.xlsx")
+
+colnames(roots.tax)[1] <- "OTU"
+TableS2_fg <- merge(TableS2_Network, fungi.tax, by="OTU")
+write_xlsx(TableS2_fg, "TableS2_fg.xlsx")
+
+colnames(fg_r_values)[1] <- "Forest"
+head(fg_r_values)
+
+colnames(nodeattrib_combine)[1] <- "OTU"
+TableS2_ind <- merge(TableS2_Network, nodeattrib_combine, by="OTU")
+write_xlsx(TableS2_ind, "TableS2_ind.xlsx")
+          
